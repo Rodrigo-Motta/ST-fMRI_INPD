@@ -1,0 +1,9 @@
+LR: 0.001
+bs: 64
+dropout: 0.0
+epochs: 101
+g3d_scales: 8
+gcn_scales: 8
+nodes: 333
+optim: Adam
+windows: 64
