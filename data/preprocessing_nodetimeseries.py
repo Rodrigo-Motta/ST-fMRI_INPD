@@ -16,6 +16,8 @@ import pandas as pd
 
 from scipy import stats
 from sklearn.model_selection import StratifiedKFold
+from sklearn.preprocessing import MinMaxScaler
+
 
 
 def main(args):
@@ -66,14 +68,22 @@ def main(args):
         nb_subject = ids.shape[0]
     elif args.filename.find('csv') != -1: 
         ids = pd.read_csv(args.filename)
+        ## -----------
+        print(ids.shape)
+        ids = ids.dropna(subset='gender').reset_index()
+        print(ids.shape)
+        ids.gender.replace(1.0, 0, inplace=True)
+        ids.gender.replace(2.0, 1, inplace=True)
+        ## --------
         nb_subject = ids.shape[0]
     else:
         raise TypeError('filetype not implemented')
+    
 
 
     data_path = str(args.data_path)
     
-    T = 100
+    T = 110
     data = np.zeros((nb_subject,1,T, 333,1))
     label = np.zeros((nb_subject,))
 
@@ -94,24 +104,17 @@ def main(args):
     non_used = []
     for i in range(nb_subject):
 
-        ## -----------
-        ids.gender.replace(1.0, 0, inplace=True)
-        ids.gender.replace(2.0, 1, inplace=True)
-        ## --------
-
         # Original subjects files
         #subject_string = format(int(ids[i,0]),'06d')
 
         ## ---------
         subject_string = str(int(ids.loc[i,'subject']))
         ## --------
-        filename = '/Users/rodrigo/Documents/data/INPD/GordonConnBOLD/GordonConnBOLD-'+subject_string+'.txt'
-        filepath = os.path.join(str(data_path),filename)
+        filename = '/INPD/GordonConnBOLD/GordonConnBOLD-'+subject_string+'.txt'
+        filepath = str(data_path) + filename
         if os.path.exists(filepath):
             full_sequence = np.loadtxt(filepath)[4:]
-            if np.any(np.sum(full_sequence, axis=0) == np.nan):
-                print('contains nan')
-                continue
+
             if np.any(np.sum(full_sequence, axis=0) == 0):
                 print('contains sum = 0')
                 continue
@@ -122,6 +125,10 @@ def main(args):
             full_sequence = np.transpose(full_sequence[:T,:])
 
             z_sequence = stats.zscore(full_sequence, axis=1)
+
+            if np.sum(np.isnan(z_sequence)) != 0:
+                print('contains nan')
+                continue
             
             if idx ==0:
                 data_all = z_sequence
@@ -208,7 +215,22 @@ def main(args):
         train_data = data[train_idx]
         train_label = label[train_idx]
         test_data = data[test_idx]
-        test_label = label[test_idx] 
+        test_label = label[test_idx]
+
+        # Normalize train and test data separately using Min-Max scaling
+        # scaler = MinMaxScaler()
+
+        # train_data_shape = train_data.shape
+        # test_data_shape = test_data.shape
+
+        # train_data = train_data.reshape(train_data_shape[0] * train_data_shape[1], -1)
+        # test_data = test_data.reshape(test_data_shape[0] * test_data_shape[1], -1)
+
+        # train_data = scaler.fit_transform(train_data)
+        # test_data = scaler.transform(test_data)
+
+        # train_data = train_data.reshape(train_data_shape)
+        # test_data = test_data.reshape(test_data_shape)
 
         filename = os.path.join(args.output_folder,'node_timeseries/node_timeseries', 'train_data_'+str(fold)+'.npy')
         np.save(filename,train_data)

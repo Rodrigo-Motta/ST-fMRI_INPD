@@ -18,7 +18,7 @@ For PyTorch and dependencies installation, please follow instructions in [instal
 In the folder /data/: 
 
 ```
- python preprocessing_nodetimeseries.py --filename phenotypic.csv  --label gender --data_path /data/HCP/rfMRI  --output_folder ../outputs/
+ python preprocessing_nodetimeseries.py --filename phenotypic.csv  --label gender --data_path /home/rc24/Documents/projects  --output_folder ../outputs/
 ```
 
 
@@ -27,7 +27,7 @@ In the folder /data/:
 For sex classification
 
 ```
-python ../tools/train_node_timeseries.py --nodes 333 --bs 64 --epochs 100 --gpu 0 --windows 20 --data_path ../outputs
+python ../tools/train_node_timeseries.py --nodes 333 --bs 32 --epochs 100 --gpu 0 --windows 20 --data_path ../outputs
 ```
 
 For fluid intelligence regression

@@ -27,9 +27,13 @@ import numpy as np
 
 from scipy.stats import pearsonr
 
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
 
 from models.MSG3D.model import Model
+
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
+torch.cuda.empty_cache()
+
 
 
 
@@ -118,7 +122,7 @@ def train(args):
             yaml.dump(hparams, file)
 
         # starting tensorboard logging
-        writer = SummaryWriter(log_dir=folder_to_save_model)
+        #writer = SummaryWriter(log_dir=folder_to_save_model)
 
 
         ##############################
@@ -192,11 +196,21 @@ def train(args):
                 outputs = net(train_data_batch_dev)
 
                 outputs = torch.sigmoid(outputs)
+                #print(outputs)
+
+
+                #if torch.any(train_data_batch_dev < 0) or torch.any(train_data_batch_dev > 1):
+                #    print(f"Invalid input values found in training data: {train_data_batch_dev}")
+                # if torch.any(train_label_batch_dev < 0) or torch.any(train_label_batch_dev > 1):
+                #     print(f"Invalid target values found in training data label: {train_label_batch_dev}")
+
                 loss = criterion(outputs.squeeze(), train_label_batch_dev)
-                writer.add_scalar('loss/train_{}'.format(fold), loss.item(), epoch+1)
+                print(loss)
+
+                #writer.add_scalar('loss/train_{}'.format(fold), loss.item(), epoch+1)
                 outputs = outputs.data.cpu().numpy() > 0.5
                 train_acc = sum(outputs[:, 0] == train_label_batch) / train_label_batch.shape[0]
-                writer.add_scalar('accuracy/train_{}'.format(fold), train_acc, epoch+1)
+                #writer.add_scalar('accuracy/train_{}'.format(fold), train_acc, epoch+1)
 
                 loss.backward()
                 optimizer.step()
@@ -243,7 +257,7 @@ def train(args):
                     test_acc = sum((prediction > 0.5) == test_label) / test_label.shape[0]
                     print(sum((prediction > 0.5) == test_label) / test_label.shape[0])
                     print('[%d] testing batch acc %f' % (epoch + 1, test_acc))
-                    writer.add_scalar('accuracy/test_{}'.format(fold), test_acc, epoch+1)
+                    #writer.add_scalar('accuracy/test_{}'.format(fold), test_acc, epoch+1)
                     if test_acc > best_test_acc_curr_fold:
                         best_test_acc_curr_fold = test_acc
                         best_test_epoch_curr_fold = epoch
@@ -253,7 +267,7 @@ def train(args):
 
             print("Best accuracy for window {} and fold {} = {} at epoch = {}".format(ws, fold, best_test_acc_curr_fold, best_test_epoch_curr_fold))
             testing_fold.append(best_test_acc_curr_fold)
-            writer.add_scalar('accuracy_best/test'.format(fold), best_test_acc_curr_fold, fold)
+            #writer.add_scalar('accuracy_best/test'.format(fold), best_test_acc_curr_fold, fold)
         
 
 
