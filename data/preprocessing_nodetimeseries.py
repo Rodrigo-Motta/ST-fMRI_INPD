@@ -70,11 +70,12 @@ def main(args):
         ids = pd.read_csv(args.filename)
         ## -----------
         print(ids.shape)
-        ids = ids.dropna(subset='gender').reset_index()
+        ids = ids.dropna(subset=args.label).reset_index()
         print(ids.shape)
         ids.gender.replace(1.0, 0, inplace=True)
         ids.gender.replace(2.0, 1, inplace=True)
         ## --------
+        ids['TOTAL_DAWBA'] = ids['TOTAL_DAWBA'].apply(lambda x: 0 if x == 0.0 else 1)
         nb_subject = ids.shape[0]
     else:
         raise TypeError('filetype not implemented')

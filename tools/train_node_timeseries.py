@@ -12,6 +12,7 @@ import os
 import argparse
 import yaml
 import sys
+
 sys.path.append('../')
 sys.path.append('./')
 
@@ -24,6 +25,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+from sklearn.metrics import roc_auc_score
+
 
 from scipy.stats import pearsonr
 
@@ -205,7 +208,7 @@ def train(args):
                 #     print(f"Invalid target values found in training data label: {train_label_batch_dev}")
 
                 loss = criterion(outputs.squeeze(), train_label_batch_dev)
-                print(loss)
+                #print(loss)
 
                 #writer.add_scalar('loss/train_{}'.format(fold), loss.item(), epoch+1)
                 outputs = outputs.data.cpu().numpy() > 0.5
@@ -254,16 +257,21 @@ def train(args):
 
                     prediction = prediction / voter
 
-                    test_acc = sum((prediction > 0.5) == test_label) / test_label.shape[0]
-                    print(sum((prediction > 0.5) == test_label) / test_label.shape[0])
-                    print('[%d] testing batch acc %f' % (epoch + 1, test_acc))
-                    #writer.add_scalar('accuracy/test_{}'.format(fold), test_acc, epoch+1)
-                    if test_acc > best_test_acc_curr_fold:
-                        best_test_acc_curr_fold = test_acc
+                    # Assuming `prediction` contains your model's output probabilities and `test_label` contains the true labels
+                    # Calculate AUC
+                    test_auc = roc_auc_score(test_label, prediction)
+                    print('AUC:', test_auc)
+                    print('[%d] testing batch AUC %f' % (epoch + 1, test_auc))
+
+                    # Logging AUC to the writer instead of accuracy
+                    # writer.add_scalar('auc/test_{}'.format(fold), test_auc, epoch+1)
+
+                    # Save model if current AUC is the best
+                    if test_auc > best_test_acc_curr_fold:
+                        best_test_acc_curr_fold = test_auc
                         best_test_epoch_curr_fold = epoch
                         print('saving model')
-                        torch.save(net.state_dict(), os.path.join(folder_to_save_model,'checkpoint.pth'))
-
+                        torch.save(net.state_dict(), os.path.join(folder_to_save_model, 'checkpoint.pth'))
 
             print("Best accuracy for window {} and fold {} = {} at epoch = {}".format(ws, fold, best_test_acc_curr_fold, best_test_epoch_curr_fold))
             testing_fold.append(best_test_acc_curr_fold)
