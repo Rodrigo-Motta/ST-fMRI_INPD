@@ -27,9 +27,8 @@ In the folder /data/:
 For sex classification
 
 ```
-python ../tools/train_node_timeseries.py --nodes 333 --bs 32 --epochs 100 --gpu 0 --windows 20 --data_path ../outputs
-```
-
+python ../tools/train_node_timeseries.py --nodes 333 --bs 32 --epochs 100 --gpu 0 --windows 20 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --network Default
+'''
 For fluid intelligence regression
 
 

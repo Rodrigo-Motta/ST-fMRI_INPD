@@ -25,6 +25,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+import pandas as pd
 from sklearn.metrics import roc_auc_score
 
 
@@ -38,15 +39,14 @@ os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
 torch.cuda.empty_cache()
 
 
-
-
 def train(args):
 
     device = torch.device("cuda:{}".format(args.gpu) if torch.cuda.is_available() else "cpu")
     #device = torch.device("mps:{}".format(args.gpu) if torch.backends.mps.is_available() else "cpu")
     print(device)   
 
-    ROI_nodes = args.nodes
+    #ROI_nodes = args.nodes
+    network = args.network
     num_epochs = args.epochs + 1
     TS = args.TS
 
@@ -62,6 +62,7 @@ def train(args):
     W_list = args.windows
 
     data_path = os.path.join(args.data_path,'node_timeseries/node_timeseries')
+    parcel_path = args.parcel_path
 
 
     hparams = {}
@@ -104,7 +105,7 @@ def train(args):
         print('Creating folder: {}'.format(folder_to_save_model))
 
         # folder ICAs
-        folder_to_save_model = os.path.join(folder_to_save_model, 'ROI_{}'.format(ROI_nodes))
+        folder_to_save_model = os.path.join(folder_to_save_model, 'ROI_{}'.format(network))
         os.makedirs(folder_to_save_model, exist_ok=True)
         print('Creating folder: {}'.format(folder_to_save_model))
         
@@ -126,7 +127,7 @@ def train(args):
 
         # starting tensorboard logging
         #writer = SummaryWriter(log_dir=folder_to_save_model)
-
+        print('Network', network)
 
         ##############################
         ######     TRAINING     ######
@@ -155,17 +156,37 @@ def train(args):
             train_label = np.load(os.path.join(data_path,'train_label_'+str(fold)+'.npy'))
             test_data = np.load(os.path.join(data_path,'test_data_'+str(fold)+'.npy'))
             test_data = test_data.reshape(test_data.shape[0], 1, test_data.shape[1], test_data.shape[2], 1)
+            adj_matrix = np.load(os.path.join(data_path,'adj_matrix.npy'))
+
+            adj_matrix = adj_matrix - np.eye(len(adj_matrix), dtype=adj_matrix.dtype)
+            
+            if network != '':
+                # Read parcels info
+                parcels = pd.read_excel(parcel_path)
+
+                # Specify the communities to filter by
+                communities_to_filter = [network]
+
+                # Identify the indices of the parcels belonging to the specified communities
+                filtered_indices = parcels[parcels['Community'].isin(communities_to_filter)].index
+
+                # Filter the arr array using these indices
+                train_data = train_data[:, :, :, filtered_indices, :]
+                test_data = test_data[:, :, :, filtered_indices, :]
+                adj_matrix = adj_matrix[np.ix_(filtered_indices, filtered_indices)]
 
             test_label = np.load(os.path.join(data_path,'test_label_'+str(fold)+'.npy'))
 
             print(train_data.shape)
-            
+            print(adj_matrix.shape)
+            ROI_nodes = train_data.shape[3]
+
             net = Model(num_class = 1,
                     num_nodes = ROI_nodes,
                     num_person = 1,
                     num_gcn_scales = num_scales_gcn,
                     num_g3d_scales = num_scales_g3d,
-                    path_to_data = data_path,
+                    adj_matrix = adj_matrix,
                     dropout= dropout)
         
             net.to(device)
@@ -315,6 +336,20 @@ if __name__ == '__main__':
                         required=True,
                         default='',
                         help='path where the data is stored')
+    
+    parser.add_argument(
+                        '--parcel_path',
+                        type=str,
+                        required=True,
+                        default='',
+                        help='path where the parcel info is stored')
+    
+    parser.add_argument(
+                        '--network',
+                        type=str,
+                        required=False,
+                        default='',
+                        help='which network to select')
                         
     parser.add_argument(
                         '--windows',

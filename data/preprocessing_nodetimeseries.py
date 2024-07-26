@@ -85,7 +85,8 @@ def main(args):
     data_path = str(args.data_path)
     
     T = 110
-    data = np.zeros((nb_subject,1,T, 333,1))
+    ROI_nodes = 333
+    data = np.zeros((nb_subject,1,T, ROI_nodes,1))
     label = np.zeros((nb_subject,))
 
     print('')

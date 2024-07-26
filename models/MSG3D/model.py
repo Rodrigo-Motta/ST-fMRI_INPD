@@ -29,15 +29,13 @@ class Model(nn.Module):
                  num_person,
                  num_gcn_scales,
                  num_g3d_scales,
-                 path_to_data,
+                 adj_matrix,
                  dropout=0,
                  in_channels=1):
 
         super(Model, self).__init__()
 
-        A = np.load(os.path.join(path_to_data,'adj_matrix.npy'))
-
-        A = A - np.eye(len(A), dtype=A.dtype)
+        A = adj_matrix
 
         self.data_bn = nn.BatchNorm1d(num_person * in_channels * num_nodes)
 
