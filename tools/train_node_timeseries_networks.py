@@ -238,7 +238,7 @@ def train(args):
 
     # Create a DataFrame and save it to a CSV file
     results_df = pd.DataFrame(results, columns=['Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
-    results_df.to_csv('training_results.csv', index=False)
+    results_df.to_csv('training_results_{}.csv'.format(ws), index=False)
     print("Results saved to training_results.csv")
 
 if __name__ == '__main__':

@@ -24,11 +24,16 @@ In the folder /data/:
 
 ## Training Brain-MS-G3D 
 
-For sex classification
+For DAWBA classification
 
 ```
-python ../tools/train_node_timeseries.py --nodes 333 --bs 32 --epochs 100 --gpu 0 --windows 20 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --network Default
-'''
+python ../tools/train_node_timeseries.py --nodes 333 --bs 32 --epochs 100 --gpu 0 --windows 20 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --network 
+``
+
+```
+python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 200 --gpu 0 --windows 20 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --networks Default SMhand SMmouth Visual FrontoParietal Auditory None CinguloParietal RetrosplenialTemporal CinguloOperc VentralAttn Salience DorsalAttn
+```
+
 For fluid intelligence regression
 
 

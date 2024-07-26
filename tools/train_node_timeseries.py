@@ -89,6 +89,7 @@ def train(args):
 
 
 
+    results = []
 
     for ws in W_list:
         
@@ -296,6 +297,12 @@ def train(args):
 
             print("Best accuracy for window {} and fold {} = {} at epoch = {}".format(ws, fold, best_test_acc_curr_fold, best_test_epoch_curr_fold))
             testing_fold.append(best_test_acc_curr_fold)
+            results.append([network, ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold])
+
+    # Create a DataFrame and save it to a CSV file
+    results_df = pd.DataFrame(results, columns=['Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
+    results_df.to_csv('training_results_{}_333.csv'.format(ws), index=False)
+    print("Results saved to training_results.csv")
             #writer.add_scalar('accuracy_best/test'.format(fold), best_test_acc_curr_fold, fold)
         
 
