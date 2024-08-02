@@ -32,7 +32,7 @@ from scipy.stats import pearsonr
 
 from models.MSG3D.model import Model
 
-os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
 torch.cuda.empty_cache()
 
 def train(args):
@@ -41,6 +41,7 @@ def train(args):
     print(device)   
 
     networks = args.networks
+
     num_epochs = args.epochs + 1
     TS = args.TS
 
@@ -78,7 +79,8 @@ def train(args):
     print('')
 
     results = []
-    print(networks)
+    predictions_df = pd.DataFrame(columns=['Subject', 'Real Label','Prediction', 'Network', 'Ensemble_networks', 'fold'])
+
     for network in networks:
         for ws in W_list:
             testing_fold = []
@@ -141,7 +143,7 @@ def train(args):
 
                 adj_matrix = adj_matrix - np.eye(len(adj_matrix), dtype=adj_matrix.dtype)
 
-                if network != '':
+                if network != ' ':
                     parcels = pd.read_excel(parcel_path)
                     communities_to_filter = [network]
                     filtered_indices = parcels[parcels['Community'].isin(communities_to_filter)].index
@@ -149,10 +151,18 @@ def train(args):
                     test_data = test_data[:, :, :, filtered_indices, :]
                     adj_matrix = adj_matrix[np.ix_(filtered_indices, filtered_indices)]
 
+                if args.ensemble_networks != '':
+                    parcels = pd.read_excel(parcel_path)
+                    communities_to_filter = args.ensemble_networks
+                    filtered_indices = parcels[parcels['Community'].isin(communities_to_filter)].index
+                    train_data = train_data[:, :, :, filtered_indices, :]
+                    test_data = test_data[:, :, :, filtered_indices, :]
+                    adj_matrix = adj_matrix[np.ix_(filtered_indices, filtered_indices)]
+
                 test_label = np.load(os.path.join(data_path, 'test_label_' + str(fold) + '.npy'))
+                test_subjects = np.load(os.path.join(data_path, 'test_subjects_' + str(fold) + '.npy'))
 
                 print(train_data.shape)
-                print(adj_matrix.shape)
                 ROI_nodes = train_data.shape[3]
 
                 net = Model(num_class=1,
@@ -171,6 +181,8 @@ def train(args):
                     optimizer = optim.Adam(net.parameters(), lr=LR, weight_decay=0.001)
 
                 for epoch in range(num_epochs):  # number of mini-batches
+                    net.train()
+
                     idx_batch = np.random.permutation(int(train_data.shape[0]))
                     idx_batch = idx_batch[:int(batch_size_training)]
 
@@ -189,6 +201,7 @@ def train(args):
                     outputs = torch.sigmoid(outputs)
 
                     loss = criterion(outputs.squeeze(), train_label_batch_dev)
+                    #print(loss)
                     outputs = outputs.data.cpu().numpy() > 0.5
                     train_acc = sum(outputs[:, 0] == train_label_batch) / train_label_batch.shape[0]
                     loss.backward()
@@ -196,6 +209,7 @@ def train(args):
 
                     epoch_val = args.epochs_val
                     if epoch % epoch_val == 0:
+                        net.eval()
                         idx_batch = np.random.permutation(int(test_data.shape[0]))
                         idx_batch = idx_batch[:int(batch_size_testing)]
 
@@ -230,16 +244,50 @@ def train(args):
                         if test_auc > best_test_auc_curr_fold:
                             best_test_auc_curr_fold = test_auc
                             best_test_epoch_curr_fold = epoch
+                            best_prediction = prediction
                             print('saving model')
                             torch.save(net.state_dict(), os.path.join(folder_to_save_model, 'checkpoint.pth'))
 
-                print("Best accuracy for window {} and fold {} = {} at epoch = {}".format(ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold))
-                results.append([network, ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold])
+                # Save the predictions along with subject numbers and real labels
+                fold_predictions_df = pd.DataFrame({
+                    'Subject': test_subjects,
+                    'Real Label': test_label,
+                    'Prediction': best_prediction,
+                    'Network' : network,
+                    'Ensemble_networks' : '_'.join(args.ensemble_networks),
+                    'fold' : fold
+                 })
+                predictions_df = pd.concat([predictions_df, fold_predictions_df])
 
-    # Create a DataFrame and save it to a CSV file
-    results_df = pd.DataFrame(results, columns=['Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
-    results_df.to_csv('training_results_{}.csv'.format(ws), index=False)
-    print("Results saved to training_results.csv")
+                print("Best accuracy for window {} and fold {} = {} at epoch = {}".format(ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold))
+                results.append([network, '_'.join(args.ensemble_networks), ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold])
+
+    if network != '':
+        # Create a DataFrame and save it to a CSV file
+        results_df = pd.DataFrame(results, columns=['Network','Ensemble Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
+        results_df.to_csv('training_results_{}_networks.csv'.format(ws), index=False)
+        print("Results saved to training_results.csv")
+        # Save the predictions with real labels and subject numbers
+        predictions_df.to_csv('predictions_{}_networks.csv'.format(ws), index=False)
+        print("Predictions saved to predictions.csv")
+
+    if args.ensemble_networks != '':
+        # Create a DataFrame and save it to a CSV file
+        results_df = pd.DataFrame(results, columns=['Network', 'Ensemble Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
+        results_df.to_csv('training_results_{}_ensemble_networks.csv'.format(ws), index=False)
+        print("Results saved to training_results.csv")
+        # Save the predictions with real labels and subject numbers
+        predictions_df.to_csv('predictions_{}_ensemble_networks.csv'.format(ws), index=False)
+        print("Predictions saved to predictions.csv")
+
+    if network == '' and args.ensemble_networks == '':
+        # Create a DataFrame and save it to a CSV file
+        results_df = pd.DataFrame(results, columns=['Network','Ensemble Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
+        results_df.to_csv('training_results_{}_333.csv'.format(ws), index=False)
+        print("Results saved to training_333.csv")
+        # Save the predictions with real labels and subject numbers
+        predictions_df.to_csv('predictions_{}_333.csv'.format(ws), index=False)
+        print("Predictions saved to predictions.csv")
 
 if __name__ == '__main__':
 
@@ -289,6 +337,16 @@ if __name__ == '__main__':
         metavar='S',
         type=str,
         required=False,
+        default=' ',
+        nargs='+',
+        help='A list of networks')
+    
+    parser.add_argument(
+        '--ensemble_networks',
+        metavar='S',
+        type=str,
+        required=False,
+        default='',
         nargs='+',
         help='A list of networks')
 

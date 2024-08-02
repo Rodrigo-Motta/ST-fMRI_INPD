@@ -19,30 +19,28 @@ sys.path.append('./')
 import random
 from datetime import datetime
 
-
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
+import gc
+from torch.cuda.amp import GradScaler, autocast
 
 
 from scipy.stats import pearsonr
-
-#from torch.utils.tensorboard import SummaryWriter
 
 from models.MSG3D.model import Model
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
 torch.cuda.empty_cache()
+gc.collect()
 
 
 def train(args):
 
     device = torch.device("cuda:{}".format(args.gpu) if torch.cuda.is_available() else "cpu")
-    #device = torch.device("mps:{}".format(args.gpu) if torch.backends.mps.is_available() else "cpu")
     print(device)   
 
     #ROI_nodes = args.nodes
@@ -79,7 +77,9 @@ def train(args):
 
     
 
-    criterion = nn.BCELoss()
+    #criterion = nn.BCELoss() # NEED SIGMOID
+    criterion = torch.nn.BCEWithLogitsLoss()
+
 
     print('')
     print('#'*30)
@@ -90,6 +90,10 @@ def train(args):
 
 
     results = []
+    predictions_df = pd.DataFrame(columns=['Subject','Real Label', 'Prediction', 'Network', 'fold'])
+
+    # Initialize GradScaler for mixed precision training
+    scaler = GradScaler()
 
     for ws in W_list:
         
@@ -148,7 +152,7 @@ def train(args):
             print("Window Size {}, Fold {}".format(ws, fold))
             print('-'*80)
             
-            best_test_acc_curr_fold = 0
+            best_test_auc_curr_fold = 0
             best_test_epoch_curr_fold = 0
             best_test_corr_curr_fold =0
             
@@ -177,6 +181,7 @@ def train(args):
                 adj_matrix = adj_matrix[np.ix_(filtered_indices, filtered_indices)]
 
             test_label = np.load(os.path.join(data_path,'test_label_'+str(fold)+'.npy'))
+            test_subjects = np.load(os.path.join(data_path, 'test_subjects_' + str(fold) + '.npy'))
 
             print(train_data.shape)
             print(adj_matrix.shape)
@@ -218,27 +223,19 @@ def train(args):
                 # forward + backward + optimize
                 optimizer.zero_grad()
 
-                outputs = net(train_data_batch_dev)
+                with autocast():
 
-                outputs = torch.sigmoid(outputs)
-                #print(outputs)
+                    outputs = net(train_data_batch_dev)
+                    #outputs = torch.sigmoid(outputs)
+                    loss = criterion(outputs.squeeze(), train_label_batch_dev)
 
-
-                #if torch.any(train_data_batch_dev < 0) or torch.any(train_data_batch_dev > 1):
-                #    print(f"Invalid input values found in training data: {train_data_batch_dev}")
-                # if torch.any(train_label_batch_dev < 0) or torch.any(train_label_batch_dev > 1):
-                #     print(f"Invalid target values found in training data label: {train_label_batch_dev}")
-
-                loss = criterion(outputs.squeeze(), train_label_batch_dev)
-                #print(loss)
-
-                #writer.add_scalar('loss/train_{}'.format(fold), loss.item(), epoch+1)
                 outputs = outputs.data.cpu().numpy() > 0.5
                 train_acc = sum(outputs[:, 0] == train_label_batch) / train_label_batch.shape[0]
-                #writer.add_scalar('accuracy/train_{}'.format(fold), train_acc, epoch+1)
 
-                loss.backward()
-                optimizer.step()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+
 
                 ##############################
                 ######    VALIDATION    ######
@@ -285,26 +282,39 @@ def train(args):
                     print('AUC:', test_auc)
                     print('[%d] testing batch AUC %f' % (epoch + 1, test_auc))
 
-                    # Logging AUC to the writer instead of accuracy
-                    # writer.add_scalar('auc/test_{}'.format(fold), test_auc, epoch+1)
-
                     # Save model if current AUC is the best
-                    if test_auc > best_test_acc_curr_fold:
-                        best_test_acc_curr_fold = test_auc
+                    if test_auc > best_test_auc_curr_fold:
+                        best_test_auc_curr_fold = test_auc
                         best_test_epoch_curr_fold = epoch
+                        best_prediction = prediction
                         print('saving model')
                         torch.save(net.state_dict(), os.path.join(folder_to_save_model, 'checkpoint.pth'))
 
-            print("Best accuracy for window {} and fold {} = {} at epoch = {}".format(ws, fold, best_test_acc_curr_fold, best_test_epoch_curr_fold))
-            testing_fold.append(best_test_acc_curr_fold)
+                torch.cuda.empty_cache()
+                gc.collect()
+
+            # Save the predictions along with subject numbers and real labels
+            fold_predictions_df = pd.DataFrame({
+                'Subject': test_subjects,
+                'Real Label': test_label,
+                'Prediction': best_prediction,
+                'fold' : fold
+            })
+            predictions_df = pd.concat([predictions_df, fold_predictions_df])
+
+            print("Best accuracy for window {} and fold {} = {} at epoch = {}".format(ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold))
+            testing_fold.append(best_test_auc_curr_fold)
             results.append([network, ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold])
 
     # Create a DataFrame and save it to a CSV file
     results_df = pd.DataFrame(results, columns=['Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
     results_df.to_csv('training_results_{}_333.csv'.format(ws), index=False)
     print("Results saved to training_results.csv")
-            #writer.add_scalar('accuracy_best/test'.format(fold), best_test_acc_curr_fold, fold)
-        
+
+
+    # Save the predictions with real labels and subject numbers
+    predictions_df.to_csv('predictions_{}_333.csv'.format(ws), index=False)
+    print("Predictions saved to predictions.csv")
 
 
 if __name__ == '__main__':

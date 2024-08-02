@@ -17,6 +17,10 @@ For PyTorch and dependencies installation, please follow instructions in [instal
 
 In the folder /data/: 
 
+'''
+python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv  --label TOTAL_DAWBA --data_path /home/rc24/Documents/projects  --output_folder ../outputs/
+'''
+
 ```
  python preprocessing_nodetimeseries.py --filename phenotypic.csv  --label gender --data_path /home/rc24/Documents/projects  --output_folder ../outputs/
 ```
@@ -27,12 +31,16 @@ In the folder /data/:
 For DAWBA classification
 
 ```
-python ../tools/train_node_timeseries.py --nodes 333 --bs 32 --epochs 100 --gpu 0 --windows 20 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --network 
+python ../tools/train_node_timeseries.py --nodes 333 --bs 32 --epochs 200 --gpu 0 --windows 30 --dropout 0.3 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx
 ``
 
 ```
-python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 200 --gpu 0 --windows 20 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --networks Default SMhand SMmouth Visual FrontoParietal Auditory None CinguloParietal RetrosplenialTemporal CinguloOperc VentralAttn Salience DorsalAttn
+python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 200 --gpu 0 --windows 30 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --networks Default SMhand SMmouth Visual FrontoParietal Auditory None CinguloParietal RetrosplenialTemporal CinguloOperc VentralAttn Salience DorsalAttn
 ```
+
+'''
+python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 200 --gpu 0 --windows 30 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --ensemble_networks Visual CinguloOperc
+'''
 
 For fluid intelligence regression
 

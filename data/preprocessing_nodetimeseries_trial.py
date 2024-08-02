@@ -39,6 +39,30 @@ def main(args):
             - ICA: Number of Independent Component Analysis (ICA) nodes.
             - data_path: Root directory path where node timeseries data files are stored.
             - output_folder: Path to the directory where results will be saved.
+
+    Variables:
+        ids: List of subject IDs loaded from the specified file.
+        nb_subject: Total number of subjects derived from the shape of `ids`.
+        data_path: Root directory path where node timeseries data files are stored.
+        T: Temporal length sequence.
+        data: Numpy array initialized to zeros with shape (nb_subject, 1, T, 333, 1) to store preprocessed timeseries data for each subject.
+        label: Numpy array initialized to zeros with shape (nb_subject,) to store labels corresponding to each subject.
+        non_used: List to keep track of subject IDs not used due to data issues.
+        subject_string: Formatted string representing the subject ID for constructing file paths.
+        filename: Specific filename for each subject's node timeseries data.
+        filepath: Full path to the node timeseries data file for each subject.
+        full_sequence: Timeseries data for a subject loaded from the file.
+        z_sequence: Z-score normalized timeseries data for a subject.
+        data_all: Concatenated array of z-score normalized timeseries data for all subjects.
+        A: Adjacency matrix computed based on the correlation of node timeseries data.
+        train_data: Subset of `data` used for training obtained from the StratifiedKFold split.
+        train_label: Subset of `label` corresponding to `train_data`.
+        test_data: Subset of `data` used for testing obtained from the StratifiedKFold split.
+        test_label: Subset of `label` corresponding to `test_data`.
+        idx: Index counter used to track the number of successfully processed subjects.
+        df: Pandas DataFrame containing the list of subject IDs not used.
+        skf: Instance of `StratifiedKFold` from `scikit-learn` used to split the data into training and testing sets.
+        fold: Counter to track the fold number in the StratifiedKFold split.
     """
      
     ### loading subject list
@@ -67,7 +91,7 @@ def main(args):
     
     data_path = str(args.data_path)
     
-    T = 110
+    T = 176 #110
     ROI_nodes = 333
     data = np.zeros((nb_subject, 1, T, ROI_nodes, 1))
     label = np.zeros((nb_subject,))
@@ -197,16 +221,24 @@ def main(args):
         test_data = data[test_idx]
         test_label = label[test_idx]
 
-        filename = os.path.join(args.output_folder,'node_timeseries/node_timeseries', 'train_data_'+str(fold)+'.npy')
-        np.save(filename,train_data)
-        filename = os.path.join(args.output_folder,'node_timeseries/node_timeseries','train_label_'+str(fold)+'.npy')
-        np.save(filename,train_label)
-        filename = os.path.join(args.output_folder,'node_timeseries/node_timeseries','test_data_'+str(fold)+'.npy')
-        np.save(filename,test_data)
-        filename = os.path.join(args.output_folder,'node_timeseries/node_timeseries','test_label_'+str(fold)+'.npy')
-        np.save(filename,test_label)
+        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'train_data_'+str(fold)+'.npy')
+        np.save(filename, train_data)
+        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'train_label_'+str(fold)+'.npy')
+        np.save(filename, train_label)
+        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'test_data_'+str(fold)+'.npy')
+        np.save(filename, test_data)
+        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'test_label_'+str(fold)+'.npy')
+        np.save(filename, test_label)
 
-        fold = fold + 1
+        # Save subject IDs for each fold
+        train_subjects = ids.loc[train_idx, 'subject'].values
+        test_subjects = ids.loc[test_idx, 'subject'].values
+        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'train_subjects_'+str(fold)+'.npy')
+        np.save(filename, train_subjects)
+        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'test_subjects_'+str(fold)+'.npy')
+        np.save(filename, test_subjects)
+
+        fold += 1
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocessing script.")
