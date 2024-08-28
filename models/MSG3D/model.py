@@ -42,7 +42,7 @@ class Model(nn.Module):
         print('Using dropout: {}'.format(dropout))
 
         # channels
-        c1 = 48 #96
+        c1 = 6 #96
         c2 = c1 * 2     # 192
         c3 = c2 * 2     # 384
 
@@ -95,6 +95,6 @@ class Model(nn.Module):
         out = out.mean(3)   # Global Average Pooling (Spatial+Temporal)
         out = out.mean(1)   # Average pool number of bodies in the sequence
 
-        out = self.fc(out)
-        return out
+        output = self.fc(out)
+        return output, out
 

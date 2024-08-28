@@ -25,6 +25,7 @@ import torch.optim as optim
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
+from sklearn.metrics import mean_absolute_error, r2_score
 
 from scipy.stats import pearsonr
 
@@ -70,7 +71,10 @@ def train(args):
     hparams['LR'] = args.LR
     hparams['optim'] = args.optim
 
-    criterion = nn.BCELoss()
+    if args.regression:
+        criterion = nn.L1Loss() #nn.MSELoss()
+    else:
+        criterion = nn.BCELoss()
 
     print('')
     print('#' * 30)
@@ -111,8 +115,6 @@ def train(args):
             with open(os.path.join(folder_to_save_model, 'hparams.yaml'), 'w') as file:
                 yaml.dump(hparams, file)
 
-            print('Network', network)
-
             ##############################
             ######     TRAINING     ######
             ##############################
@@ -132,6 +134,7 @@ def train(args):
                 print('-' * 80)
 
                 best_test_auc_curr_fold = 0
+                best_test_mae_curr_fold = 100000
                 best_test_epoch_curr_fold = 0
 
                 train_data = np.load(os.path.join(data_path, 'train_data_' + str(fold) + '.npy'))
@@ -143,15 +146,41 @@ def train(args):
 
                 adj_matrix = adj_matrix - np.eye(len(adj_matrix), dtype=adj_matrix.dtype)
 
-                if network != ' ':
+                if networks != ' ':# Load the parcels data
                     parcels = pd.read_excel(parcel_path)
-                    communities_to_filter = [network]
-                    filtered_indices = parcels[parcels['Community'].isin(communities_to_filter)].index
-                    train_data = train_data[:, :, :, filtered_indices, :]
-                    test_data = test_data[:, :, :, filtered_indices, :]
-                    adj_matrix = adj_matrix[np.ix_(filtered_indices, filtered_indices)]
+                 
+                    if args.remove_network == True:
+                        print('#'*30)
+                        print('Removing Network {}'.format(network))
+                        print('#'*30)
 
-                if args.ensemble_networks != '':
+                        # Remove network from training
+                        indices_to_remove = parcels[parcels['Community'] == network].index
+
+                        # Filter out these indices from the data
+                        remaining_indices = parcels.index.difference(indices_to_remove)
+
+                        # Update the data structures by excluding the indices to be removed
+                        train_data = train_data[:, :, :, remaining_indices, :]
+                        test_data = test_data[:, :, :, remaining_indices, :]
+                        adj_matrix = adj_matrix[np.ix_(remaining_indices, remaining_indices)]
+                    else:
+                        print('#'*30)
+                        print('Selecting Network {}'.format(network))
+                        print('#'*30)
+
+                        # Select network for training
+                        communities_to_filter = [network]
+                        filtered_indices = parcels[parcels['Community'].isin(communities_to_filter)].index
+                        train_data = train_data[:, :, :, filtered_indices, :]
+                        test_data = test_data[:, :, :, filtered_indices, :]
+                        adj_matrix = adj_matrix[np.ix_(filtered_indices, filtered_indices)]
+
+                if args.ensemble_networks != ' ':
+                    print('#'*30)
+                    print('Selecting Ensemble of Networks {}'.format(args.ensemble_networks))
+                    print('#'*30)
+
                     parcels = pd.read_excel(parcel_path)
                     communities_to_filter = args.ensemble_networks
                     filtered_indices = parcels[parcels['Community'].isin(communities_to_filter)].index
@@ -198,7 +227,12 @@ def train(args):
 
                     optimizer.zero_grad()
                     outputs = net(train_data_batch_dev)
-                    outputs = torch.sigmoid(outputs)
+
+                    if args.regression:
+                        loss = criterion(outputs.squeeze(), train_label_batch_dev)
+                        correlation = pearsonr(outputs.data.cpu().numpy().reshape(-1),train_label_batch_dev.cpu())[0]
+                    else:
+                        outputs = torch.sigmoid(outputs)
 
                     loss = criterion(outputs.squeeze(), train_label_batch_dev)
                     #print(loss)
@@ -216,6 +250,8 @@ def train(args):
                         test_label_batch = test_label[idx_batch]
                         prediction = np.zeros((test_data.shape[0],))
                         voter = np.zeros((test_data.shape[0],))
+                        if args.regression:
+                            losses = 0
 
                         for v in range(TS):
                             idx = np.random.permutation(int(test_data.shape[0]))
@@ -231,22 +267,38 @@ def train(args):
                                 test_data_batch_dev = torch.from_numpy(test_data_batch).float().to(device)
 
                                 outputs = net(test_data_batch_dev)
+                                if args.regression:
+                                    losses+= nn.functional.mse_loss(outputs.squeeze(), torch.from_numpy(test_label[idx_batch]).float().to(device)).detach().cpu().numpy()
+
                                 outputs = outputs.data.cpu().numpy()
 
                                 prediction[idx_batch] = prediction[idx_batch] + outputs[:, 0]
                                 voter[idx_batch] = voter[idx_batch] + 1
 
                         prediction = prediction / voter
-                        test_auc = roc_auc_score(test_label, prediction)
-                        print('AUC:', test_auc)
-                        print('[%d] testing batch AUC %f' % (epoch + 1, test_auc))
 
-                        if test_auc > best_test_auc_curr_fold:
-                            best_test_auc_curr_fold = test_auc
-                            best_test_epoch_curr_fold = epoch
-                            best_prediction = prediction
-                            print('saving model')
-                            torch.save(net.state_dict(), os.path.join(folder_to_save_model, 'checkpoint.pth'))
+                        if args.regression:
+                            test_mae = mean_absolute_error(prediction,test_label)
+                            print(r2_score(prediction,test_label))
+                            print('MAE:', test_mae)
+                            print('[%d] testing batch MAE %f' % (epoch + 1, test_mae))
+                            if test_mae < best_test_mae_curr_fold:
+                                best_test_mae_curr_fold = test_mae
+                                best_test_epoch_curr_fold = epoch
+                                best_prediction = prediction
+                                print('saving model')
+                                torch.save(net.state_dict(), os.path.join(folder_to_save_model,'checkpoint.pth'))
+                        else:
+                            test_auc = roc_auc_score(test_label, prediction)
+                            print('AUC:', test_auc)
+                            print('[%d] testing batch AUC %f' % (epoch + 1, test_auc))
+        
+                            if test_auc > best_test_auc_curr_fold:
+                                best_test_auc_curr_fold = test_auc
+                                best_test_epoch_curr_fold = epoch
+                                best_prediction = prediction
+                                print('saving model')
+                                torch.save(net.state_dict(), os.path.join(folder_to_save_model, 'checkpoint.pth'))
 
                 # Save the predictions along with subject numbers and real labels
                 fold_predictions_df = pd.DataFrame({
@@ -259,35 +311,45 @@ def train(args):
                  })
                 predictions_df = pd.concat([predictions_df, fold_predictions_df])
 
-                print("Best accuracy for window {} and fold {} = {} at epoch = {}".format(ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold))
-                results.append([network, '_'.join(args.ensemble_networks), ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold])
+                if args.regression:
+                    print("Best r2 for window {} and fold {} = {} at epoch = {}".format(ws, fold, best_test_mae_curr_fold, best_test_epoch_curr_fold))
+                    results.append([network, '_'.join(args.ensemble_networks), ws, fold, best_test_mae_curr_fold, best_test_epoch_curr_fold])
 
-    if network != '':
-        # Create a DataFrame and save it to a CSV file
-        results_df = pd.DataFrame(results, columns=['Network','Ensemble Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
-        results_df.to_csv('training_results_{}_networks.csv'.format(ws), index=False)
-        print("Results saved to training_results.csv")
-        # Save the predictions with real labels and subject numbers
-        predictions_df.to_csv('predictions_{}_networks.csv'.format(ws), index=False)
-        print("Predictions saved to predictions.csv")
+                else:
+                    print("Best accuracy for window {} and fold {} = {} at epoch = {}".format(ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold))
+                    results.append([network, '_'.join(args.ensemble_networks), ws, fold, best_test_auc_curr_fold, best_test_epoch_curr_fold])
 
-    if args.ensemble_networks != '':
-        # Create a DataFrame and save it to a CSV file
-        results_df = pd.DataFrame(results, columns=['Network', 'Ensemble Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
-        results_df.to_csv('training_results_{}_ensemble_networks.csv'.format(ws), index=False)
-        print("Results saved to training_results.csv")
-        # Save the predictions with real labels and subject numbers
-        predictions_df.to_csv('predictions_{}_ensemble_networks.csv'.format(ws), index=False)
-        print("Predictions saved to predictions.csv")
+        if args.regression:
+            # Create a DataFrame and save it to a CSV file
+            results_df = pd.DataFrame(results, columns=['Network','Ensemble Network', 'Window Size', 'Fold', 'Best MAE', 'Epoch'])
+        else:
+            results_df = pd.DataFrame(results, columns=['Network','Ensemble Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
 
-    if network == '' and args.ensemble_networks == '':
-        # Create a DataFrame and save it to a CSV file
-        results_df = pd.DataFrame(results, columns=['Network','Ensemble Network', 'Window Size', 'Fold', 'Best AUC', 'Epoch'])
-        results_df.to_csv('training_results_{}_333.csv'.format(ws), index=False)
-        print("Results saved to training_333.csv")
-        # Save the predictions with real labels and subject numbers
-        predictions_df.to_csv('predictions_{}_333.csv'.format(ws), index=False)
-        print("Predictions saved to predictions.csv")
+        if networks != ' ':
+            # Create a DataFrame and save it to a CSV file
+            results_df.to_csv('training_results_{}_networks.csv'.format(ws), index=False)
+            print("Results saved to training_results.csv")
+            # Save the predictions with real labels and subject numbers
+            predictions_df.to_csv('predictions_{}_networks.csv'.format(ws), index=False)
+            print("Predictions saved to predictions.csv")
+
+        if args.ensemble_networks != ' ':
+            # Create a DataFrame and save it to a CSV file
+            results_df.to_csv('training_results_{}_ensemble_networks.csv'.format(ws), index=False)
+            print("Results saved to training_results.csv")
+            # Save the predictions with real labels and subject numbers
+            predictions_df.to_csv('predictions_{}_ensemble_networks.csv'.format(ws), index=False)
+            print("Predictions saved to predictions.csv")
+
+        if networks == ' ' and args.ensemble_networks == ' ':
+            # Create a DataFrame and save it to a CSV file
+            results_df.to_csv('training_results_{}_333.csv'.format(ws), index=False)
+            print("Results saved to training_333.csv")
+            # Save the predictions with real labels and subject numbers
+            predictions_df.to_csv('predictions_{}_333.csv'.format(ws), index=False)
+            print("Predictions saved to predictions.csv")
+
+    torch.cuda.empty_cache()
 
 if __name__ == '__main__':
 
@@ -339,16 +401,32 @@ if __name__ == '__main__':
         required=False,
         default=' ',
         nargs='+',
-        help='A list of networks')
+        help='A list of networks for training')
+    
+    parser.add_argument(
+        '--remove_network',
+        metavar='S',
+        type=bool,
+        required=False,
+        default=False,
+        help='Remove network from traning')
     
     parser.add_argument(
         '--ensemble_networks',
         metavar='S',
         type=str,
         required=False,
-        default='',
+        default=' ',
         nargs='+',
-        help='A list of networks')
+        help='A list of networks for training')
+        
+    parser.add_argument(
+        '--regression',
+        metavar='S',
+        type=bool,
+        required=False,
+        default=False,
+        help='task (classification or regression)')
 
     parser.add_argument(
         '--windows',
