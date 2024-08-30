@@ -156,8 +156,8 @@ def main(args):
     test_idx = ids[ids['TOTAL_DAWBA'] != 0].index
 
     # Select 50 subjects for validation set where dawba == 0
-    validation_idx = train_idx[:50]
-    remaining_train_idx = train_idx[50:]
+    validation_idx = train_idx[:70]
+    remaining_train_idx = train_idx[70:]
 
     validation_data = data[validation_idx]
     validation_label = label[validation_idx]

@@ -42,7 +42,7 @@ class Model(nn.Module):
         print('Using dropout: {}'.format(dropout))
 
         # channels
-        c1 = 6 #96
+        c1 = 96 #48 #96
         c2 = c1 * 2     # 192
         c3 = c2 * 2     # 384
 

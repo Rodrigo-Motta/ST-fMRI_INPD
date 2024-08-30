@@ -7,6 +7,7 @@ import pandas as pd
 from scipy import stats
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import KFold
 
 def compute_adjacency_matrix(data):
     """
@@ -84,7 +85,9 @@ def main(args):
         ids.gender.replace(1.0, 0, inplace=True)
         ids.gender.replace(2.0, 1, inplace=True)
         ## --------
-        ids['TOTAL_DAWBA'] = ids['TOTAL_DAWBA'].apply(lambda x: 0 if x == 0.0 else 1)
+        if args.regression == False:
+            ids['TOTAL_DAWBA'] = ids['TOTAL_DAWBA'].apply(lambda x: 0 if x == 0.0 else 1)
+            
         nb_subject = ids.shape[0]
     else:
         raise TypeError('filetype not implemented')
@@ -213,7 +216,11 @@ def main(args):
 
     # split train/test and save data
     
-    skf = StratifiedKFold(n_splits=5,shuffle=True)
+    if args.regression:
+        skf = KFold(n_splits=5, shuffle=True, random_state=42)
+    else:
+        skf = StratifiedKFold(n_splits=5,shuffle=True, random_state=42)
+
     fold = 1
     for train_idx, test_idx in skf.split(data, label):
         train_data = data[train_idx]
@@ -244,6 +251,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocessing script.")
     parser.add_argument('--filename', required=True, help='Path to the subject ID file (txt or csv).')
     parser.add_argument('--label', required=True, type=str, help='Label name.')
+    parser.add_argument('--regression', required=False, default=False, metavar='S',type=bool, help='task (classification or regression).')
     parser.add_argument('--data_path', required=True, help='Base directory of node timeseries data.')
     parser.add_argument('--output_folder', required=True, help='Directory to save the output data.')
 

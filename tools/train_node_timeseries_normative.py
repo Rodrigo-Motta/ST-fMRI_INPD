@@ -37,16 +37,62 @@ from models.MSG3D.model import Model
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
 torch.cuda.empty_cache()
 
-class RMSLELoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.mse = nn.MSELoss()
+# Define a custom loss function with penalties for left and right tails
+class CustomMSELoss(nn.Module):
+    def __init__(self, left_percentile=15, right_percentile=85, left_penalty=10, right_penalty=10, variance_penalty_weight=1.5):
+        super(CustomMSELoss, self).__init__()
+        self.left_percentile = left_percentile
+        self.right_percentile = right_percentile
+        self.left_penalty = left_penalty
+        self.right_penalty = right_penalty
+        self.variance_penalty_weight = variance_penalty_weight
+
+    def forward(self, y_pred, y_true):
+        # Calculate the residuals
+        residuals = y_true - y_pred
         
-    def forward(self, pred, actual):
-        epsilon = 1e-6
-        pred = torch.clamp(pred, min=epsilon, max=1e6)  # Clamping both lower and upper bounds
-        actual = torch.clamp(actual, min=epsilon, max=1e6)
-        return torch.sqrt(self.mse(torch.log(pred + 1), torch.log(actual + 1)))
+        # Convert tensors to CPU for percentile calculations
+        y_true_np = y_true.detach().cpu().numpy()
+        
+        # Calculate the percentiles
+        left_threshold = torch.tensor(np.percentile(y_true_np, self.left_percentile)).to(y_true.device)
+        right_threshold = torch.tensor(np.percentile(y_true_np, self.right_percentile)).to(y_true.device)
+        
+        # Apply penalties: scale residuals based on whether they're in the left or right tail
+        left_mask = y_true < left_threshold
+        right_mask = y_true > right_threshold
+        
+        # Apply penalties to the residuals
+        penalties = torch.ones_like(y_true)
+        penalties[left_mask] *= self.left_penalty
+        penalties[right_mask] *= self.right_penalty
+        
+        # Compute the scaled MSE
+        mse_loss = torch.mean(penalties * residuals ** 2)
+        
+        # Variance penalty to encourage a wider distribution
+        variance_penalty = torch.var(y_pred)
+        
+        # Combine MSE loss with variance penalty
+        loss = mse_loss - self.variance_penalty_weight * variance_penalty
+        
+        return loss
+    
+# Define the custom Root Mean Log Squared Error loss function
+class RMLSELoss(nn.Module):
+    def __init__(self):
+        super(RMLSELoss, self).__init__()
+
+    def forward(self, y_pred, y_true):
+        # Add 1 to avoid log(0)
+        log_pred = torch.log(y_pred + 1)
+        log_true = torch.log(y_true + 1)
+        # Compute the squared difference
+        squared_log_error = (log_pred - log_true) ** 2
+        # Calculate the mean and then take the square root
+        mean_squared_log_error = torch.mean(squared_log_error)
+        rmlse = torch.sqrt(mean_squared_log_error)
+        return rmlse
 
 def train(args):
 
@@ -84,7 +130,7 @@ def train(args):
     hparams['optim'] = args.optim
 
     if args.regression:
-        criterion = nn.MSELoss() #nn.L1Loss()
+        criterion = CustomMSELoss() #nn.MSELoss() #nn.L1Loss()
     else:
         criterion = nn.BCELoss()
 
@@ -146,6 +192,7 @@ def train(args):
             best_test_auc_curr = 0
             best_test_r2_curr = -100000
             best_test_epoch_curr = 0
+            best_val_loss = 1000
 
             train_data = np.load(os.path.join(data_path, 'train_data' + '.npy'))
             train_data = train_data.reshape(train_data.shape[0], 1, train_data.shape[1], train_data.shape[2], 1)
@@ -263,6 +310,9 @@ def train(args):
 
                 epoch_val = args.epochs_val
                 if epoch % epoch_val == 0:
+                    print('/n')
+                    print('Epoch', epoch)
+
                     net.eval()
 
                     ######################### Evaluate on the validation set ##############################
@@ -271,6 +321,10 @@ def train(args):
 
                     # Initialize an array to accumulate hidden layer outputs
                     validation_hidden_accumulation = None
+
+                    # Initialize variable to accumulate validation loss
+                    total_val_loss = 0
+                    loss_function = torch.nn.MSELoss() if args.regression else torch.nn.BCELoss()
 
                     for v in range(TS):
                         idx = np.random.permutation(int(validation_data.shape[0]))
@@ -294,6 +348,14 @@ def train(args):
                             else:
                                 outputs = torch.sigmoid(outputs).squeeze().data.cpu().numpy()
                                 layer = layer.squeeze().data.cpu().numpy()  # Convert hidden layer to numpy
+
+                            # Compute the loss for the current batch
+                            true_labels = torch.from_numpy(validation_label[idx_batch]).float().to(device)
+                            outputs_tensor = torch.from_numpy(outputs).float().to(device)
+
+                            # Calculate the batch loss
+                            batch_loss = criterion(outputs_tensor, true_labels)
+                            total_val_loss += batch_loss.item()
 
                             # Initialize the hidden layer accumulation array dynamically if not already initialized
                             if validation_hidden_accumulation is None:
@@ -321,6 +383,10 @@ def train(args):
 
                     # Finalize validation predictions
                     validation_prediction = validation_prediction / voter
+
+                    # Calculate the average validation loss
+                    val_loss = total_val_loss / (TS * (validation_data.shape[0] / batch_size_testing))
+                    print(f'Validation Loss: {val_loss}')
 
                     ######################### Evaluate on the test set ##############################
                     test_prediction = np.zeros((test_data.shape[0],))
@@ -435,8 +501,6 @@ def train(args):
                     # Finalize train predictions
                     train_prediction = train_prediction / voter
 
-                    # Similar changes should be applied when evaluating on the test set.
-                    print('Epoch', epoch)
 
                     if args.regression:
                         validation_mae = mean_absolute_error(validation_label, validation_prediction)
@@ -445,7 +509,8 @@ def train(args):
                         print('Validation MAE:', validation_mae)
                         print('Validation R2:', validation_r2) 
 
-                        if validation_r2 > best_test_r2_curr:
+                        if val_loss < best_val_loss:
+                            best_val_loss = total_val_loss
                             best_test_r2_curr = validation_r2
                             best_test_epoch_curr = epoch
                             best_validation_prediction = validation_prediction
