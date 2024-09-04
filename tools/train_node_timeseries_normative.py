@@ -37,9 +37,107 @@ from models.MSG3D.model import Model
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
 torch.cuda.empty_cache()
 
+
+import torch
+import torch.nn as nn
+
+class CustomLossWithUniformity(nn.Module):
+    def __init__(self, lambda_reg=0.3, num_bins=10, range_min=7, range_max=15):
+        super(CustomLossWithUniformity, self).__init__()
+        self.lambda_reg = lambda_reg
+        self.num_bins = num_bins
+        self.range_min = range_min
+        self.range_max = range_max
+
+    def forward(self, y_true, y_pred):
+        # Mean Squared Error (MSE) term
+        mse = torch.mean((y_true - y_pred) ** 2)
+        
+        # Create histogram of predictions
+        hist = torch.histc(y_pred, bins=self.num_bins, min=self.range_min, max=self.range_max)
+        
+        # Calculate the target uniform distribution
+        target_uniform = torch.full((self.num_bins,), 1.0 / self.num_bins, dtype=torch.float32)
+        
+        # Normalize histogram
+        hist_normalized = hist / torch.sum(hist)
+        
+        # Calculate uniformity penalty using KL Divergence
+        uniformity_penalty = torch.sum(hist_normalized * torch.log(hist_normalized / target_uniform + 1e-8))
+        
+        # Combine MSE and uniformity penalty
+        total_loss = mse + self.lambda_reg * uniformity_penalty
+        return total_loss
+    
+class QuantileLoss(nn.Module):
+    def __init__(self, quantile=0.9):
+        """
+        Initialize the quantile loss function.
+        
+        Args:
+        - quantile (float): The quantile to use for the loss calculation. Must be between 0 and 1.
+        """
+        super(QuantileLoss, self).__init__()
+        self.quantile = quantile
+
+    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the quantile loss.
+
+        Args:
+        - y_pred (torch.Tensor): Predicted values.
+        - y_true (torch.Tensor): True values.
+
+        Returns:
+        - torch.Tensor: The quantile loss.
+        """
+        errors = y_true - y_pred
+        loss = torch.max(
+            (self.quantile - 1) * errors,
+            self.quantile * errors
+        )
+        return loss.mean()
+
+class TrendRemovalLoss(nn.Module):
+    def __init__(self, lambda_trend=0):
+        super(TrendRemovalLoss, self).__init__()
+        self.lambda_trend = lambda_trend
+        self.mse_loss = nn.MSELoss()
+
+    def forward(self, predictions, targets):
+        # Compute the residuals
+        residuals = predictions - targets
+        
+        # Ensure residuals are 2D (n, 1) for lstsq
+        if residuals.dim() == 1:
+            residuals = residuals.unsqueeze(1)
+        
+        # Mean Squared Error Loss
+        mse_loss = self.mse_loss(predictions, targets)
+
+        # Remove linear trend from residuals using torch.linalg.lstsq
+        n = residuals.size(0)
+        x = torch.arange(n, dtype=torch.float32, device=residuals.device).unsqueeze(1)
+        X = torch.cat((x, torch.ones_like(x)), dim=1)  # Design matrix [x, 1] for linear regression
+        
+        # Solve for linear regression coefficients using torch.linalg.lstsq
+        result = torch.linalg.lstsq(X, residuals)
+        coeffs = result.solution
+
+        # Calculate the trend component
+        trend = X @ coeffs
+
+        # Trend Loss: Penalize the magnitude of the trend
+        trend_loss = torch.mean(trend ** 2)
+
+        # Combined loss
+        loss = mse_loss + self.lambda_trend * trend_loss
+        
+        return loss
+    
 # Define a custom loss function with penalties for left and right tails
 class CustomMSELoss(nn.Module):
-    def __init__(self, left_percentile=15, right_percentile=85, left_penalty=10, right_penalty=10, variance_penalty_weight=1.5):
+    def __init__(self, left_percentile=20, right_percentile=80, left_penalty=2, right_penalty=2, variance_penalty_weight=2):
         super(CustomMSELoss, self).__init__()
         self.left_percentile = left_percentile
         self.right_percentile = right_percentile
@@ -130,7 +228,7 @@ def train(args):
     hparams['optim'] = args.optim
 
     if args.regression:
-        criterion = CustomMSELoss() #nn.MSELoss() #nn.L1Loss()
+        criterion = CustomMSELoss() #CustomLossWithUniformity() #TrendRemovalLoss() #CustomMSELoss() #nn.MSELoss() #nn.L1Loss()
     else:
         criterion = nn.BCELoss()
 
@@ -192,14 +290,13 @@ def train(args):
             best_test_auc_curr = 0
             best_test_r2_curr = -100000
             best_test_epoch_curr = 0
-            best_val_loss = 1000
+            best_val_loss = 10000
 
             train_data = np.load(os.path.join(data_path, 'train_data' + '.npy'))
             train_data = train_data.reshape(train_data.shape[0], 1, train_data.shape[1], train_data.shape[2], 1)
             train_label = np.load(os.path.join(data_path, 'train_label' + '.npy'))/12
             train_subjects = np.load(os.path.join(data_path, 'train_subjects' + '.npy'))
 
-            print(train_label)
             validation_data = np.load(os.path.join(data_path, 'validation_data' + '.npy'))
             validation_data = validation_data.reshape(validation_data.shape[0], 1, validation_data.shape[1], validation_data.shape[2], 1)
             test_data = np.load(os.path.join(data_path, 'test_data' + '.npy'))
@@ -302,6 +399,7 @@ def train(args):
                     outputs = torch.sigmoid(outputs)
 
                 loss = criterion(outputs.squeeze(), train_label_batch_dev)
+                print(loss)
                 #print(loss)
                 outputs = outputs.data.cpu().numpy() > 0.5
                 train_acc = sum(outputs[:, 0] == train_label_batch) / train_label_batch.shape[0]
@@ -310,7 +408,7 @@ def train(args):
 
                 epoch_val = args.epochs_val
                 if epoch % epoch_val == 0:
-                    print('/n')
+                    print('')
                     print('Epoch', epoch)
 
                     net.eval()
@@ -324,7 +422,6 @@ def train(args):
 
                     # Initialize variable to accumulate validation loss
                     total_val_loss = 0
-                    loss_function = torch.nn.MSELoss() if args.regression else torch.nn.BCELoss()
 
                     for v in range(TS):
                         idx = np.random.permutation(int(validation_data.shape[0]))
@@ -508,6 +605,7 @@ def train(args):
 
                         print('Validation MAE:', validation_mae)
                         print('Validation R2:', validation_r2) 
+                        print('Validation residuals', r2_score(validation_label, validation_prediction - validation_label))
 
                         if val_loss < best_val_loss:
                             best_val_loss = total_val_loss

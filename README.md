@@ -28,6 +28,12 @@ python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv  --label 
 python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv  --label age_mri_baseline --data_path /home/rc24/Documents/projects  --output_folder ../outputs/ --regression True
 '''
 
+For Normative Model
+
+'''
+python preprocessing_nodetimeseries_normative.py --filename phenotypic.csv  --label age_mri_baseline --data_path /home/rc24/Documents/projects  --output_folder ../outputs/ --regression True
+'''
+
 
 ## Training Brain-MS-G3D 
 
