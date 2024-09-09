@@ -15,79 +15,101 @@ For PyTorch and dependencies installation, please follow instructions in [instal
 
 ## Preprocessing 
 
+### Gordon
 In the folder /data/: 
 
 '''
-python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv  --label TOTAL_DAWBA --data_path /home/rc24/Documents/projects  --output_folder ../outputs/
+python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv  --label TOTAL_DAWBA --data_path /home/rc24/Documents/projects  --output_folder ../outputs/ --parcel Gordon
 '''
 
 ```
- python preprocessing_nodetimeseries.py --filename phenotypic.csv  --label gender --data_path /home/rc24/Documents/projects  --output_folder ../outputs/
+ python preprocessing_nodetimeseries.py --filename phenotypic.csv  --label gender --data_path /home/rc24/Documents/projects  --output_folder ../outputs/ --parcel Gordon
 ```
 '''
-python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv  --label age_mri_baseline --data_path /home/rc24/Documents/projects  --output_folder ../outputs/ --regression True
+python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv  --label age_mri_baseline --data_path /home/rc24/Documents/projects  --output_folder ../outputs/ --regression True --parcel Gordon
+'''
+### for Normative Model
+
+'''
+python preprocessing_nodetimeseries_normative.py --filename phenotypic.csv  --label age_mri_baseline --data_path /home/rc24/Documents/projects  --output_folder ../outputs/ --regression True --parcel Gordon
 '''
 
-For Normative Model
+### Schaefer
+
+### for Normative Model
 
 '''
-python preprocessing_nodetimeseries_normative.py --filename phenotypic.csv  --label age_mri_baseline --data_path /home/rc24/Documents/projects  --output_folder ../outputs/ --regression True
+python preprocessing_nodetimeseries_normative.py --filename phenotypic.csv  --label age_mri_baseline --data_path /home/rc24/Documents/projects  --output_folder ../outputs/ --regression True --parcel Schaefer
 '''
 
 
-## Training Brain-MS-G3D 
 
-For classification
+# Training Brain-MS-G3D 
 
-## Train in whole data
+## For classification
+
+### Train in whole data
 ```
 python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 200 --gpu 0 --windows 80 --dropout 0.0 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx
 ```
 
-## To training on each network
+### To training on each network
 ```
 python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 200 --gpu 1 --windows 40 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --networks Default SMhand SMmouth Visual FrontoParietal Auditory None CinguloParietal RetrosplenialTemporal CinguloOperc VentralAttn Salience DorsalAttn
 ```
 
-## To remove a network from training
+### To remove a network from training
 ```
 python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 16 --epochs 300 --gpu 0 --windows 20 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --networks Default SMhand SMmouth Visual FrontoParietal Auditory None CinguloParietal RetrosplenialTemporal CinguloOperc VentralAttn Salience DorsalAttn --remove_network True
 ```
 
-## Ensemble network
+### Ensemble network
 '''
 python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 200 --gpu 0 --windows 30 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --ensemble_networks Default SMhand
 '''
 
-For Regression
+## For Regression
 
-## Train in whole data
+### Train in whole data
 ```
 python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 300 --gpu 0 --windows 80 --dropout 0.0 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --regression True
 ```
 
-## To training on each network
+### To training on each network
 ```
 python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 300 --gpu 1 --windows 40 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --networks Default SMhand SMmouth Visual FrontoParietal Auditory None CinguloParietal RetrosplenialTemporal CinguloOperc VentralAttn Salience DorsalAttn --regression True
 ```
 
-## To remove a network from training
+### To remove a network from training
 ```
 python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 16 --epochs 300 --gpu 0 --windows 20 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --networks Default SMhand SMmouth Visual FrontoParietal Auditory None CinguloParietal RetrosplenialTemporal CinguloOperc VentralAttn Salience DorsalAttn --remove_network True --regression True
 ```
 
-## Ensemble network
+### Ensemble network
 '''
 python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 200 --gpu 0 --windows 30 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Parcels.xlsx --ensemble_networks Default SMhand --regression True
 '''
 
-## Tensorboard
+## Schaefer Parcellation
 
-Starting tensorboard visualisation
+## Regression
 
-```
-tensorboard --logdir ./logs/MS-G3D/
-```
+'''
+python ../tools/train_node_timeseries_networks.py --nodes 333 --bs 32 --epochs 300 --gpu 0 --windows 80 --dropout 0.0 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Parcels_7Networks.xlsx --regression True
+'''
+## Classification DAWBA
+
+'''
+python ../tools/train_node_timeseries_networks.py  --bs 32 --epochs 300 --gpu 1 --windows 40 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Parcels_7Networks.xlsx --networks Vis SomMot DorsAttn SalVentAttn Limbic Cont Default
+'''
+
+
+### Normative
+'''
+python ../tools/train_node_timeseries_normative.py --nodes 333 --bs 8 --epochs 300 --gpu 0 --windows 42 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Parcels_7Networks.xlsx  --dropout 0.7 --regression True
+'''
+
+
 
 
 ## Docker support 

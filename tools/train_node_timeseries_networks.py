@@ -62,7 +62,6 @@ def train(args):
 
     hparams = {}
     hparams['bs'] = args.bs
-    hparams['nodes'] = args.nodes
     hparams['epochs'] = args.epochs + 1
     hparams['windows'] = args.windows
     hparams['g3d_scales'] = args.gcn_scales
@@ -226,7 +225,7 @@ def train(args):
                     train_label_batch_dev = torch.from_numpy(train_label_batch).float().to(device)
 
                     optimizer.zero_grad()
-                    outputs = net(train_data_batch_dev)
+                    outputs = net(train_data_batch_dev)[0]
 
                     if args.regression:
                         loss = criterion(outputs.squeeze(), train_label_batch_dev)
@@ -266,7 +265,7 @@ def train(args):
 
                                 test_data_batch_dev = torch.from_numpy(test_data_batch).float().to(device)
 
-                                outputs = net(test_data_batch_dev)
+                                outputs = net(test_data_batch_dev)[0]
                                 if args.regression:
                                     losses+= nn.functional.mse_loss(outputs.squeeze(), torch.from_numpy(test_label[idx_batch]).float().to(device)).detach().cpu().numpy()
 
@@ -355,12 +354,6 @@ if __name__ == '__main__':
 
     # Set up argument parser
     parser = argparse.ArgumentParser(description='MS-G3D')
-
-    parser.add_argument(
-        '--nodes',
-        type=int,
-        required=True,
-        help='the number of ICA nodes')
 
     parser.add_argument(
         '--bs',

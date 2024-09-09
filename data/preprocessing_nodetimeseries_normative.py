@@ -44,7 +44,12 @@ def main(args):
     data_path = str(args.data_path)
     
     T = 176
-    ROI_nodes = 333
+
+    if args.parcel == 'Gordon':
+        ROI_nodes = 333
+    if args.parcel == 'Schaefer':
+        ROI_nodes = 300
+
     data = np.zeros((nb_subject, 1, T, ROI_nodes, 1))
     label = np.zeros((nb_subject,))
 
@@ -65,10 +70,22 @@ def main(args):
     
     for i in range(nb_subject):
         subject_string = str(int(ids.loc[i,'subject']))
-        filename = '/INPD/GordonConnBOLD/GordonConnBOLD-'+subject_string+'.txt'
+
+        # Gordon Parcellation
+        if args.parcel == 'Gordon':
+            filename = '/INPD/GordonConnBOLD/GordonConnBOLD-'+subject_string+'.txt'
+            
+        # Schaefer Parcellation
+        if args.parcel == 'Schaefer':
+            filename = '/INPD/Schaefer/Schaefer_fMRIPREP_BOLD-'+subject_string+'.txt'
+
         filepath = str(data_path) + filename
         if os.path.exists(filepath):
-            full_sequence = np.loadtxt(filepath)[4:]
+
+            if args.parcel == 'Gordon':
+                full_sequence = np.loadtxt(filepath)[4:]
+            if args.parcel == 'Schaefer':
+                full_sequence = np.loadtxt(filepath)[:]
 
             if full_sequence.shape[0] < T:
                 print('sequence too short :{}'.format(filepath))
@@ -195,6 +212,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocessing script.")
     parser.add_argument('--filename', required=True, help='Path to the subject ID file (txt or csv).')
     parser.add_argument('--label', required=True, type=str, help='Label name.')
+    parser.add_argument('--parcel', required=True, type=str, help='Parcellation name.')
     parser.add_argument('--regression', required=False, default=False, metavar='S', type=bool, help='task (classification or regression).')
     parser.add_argument('--data_path', required=True, help='Base directory of node timeseries data.')
     parser.add_argument('--output_folder', required=True, help='Directory to save the output data.')

@@ -97,47 +97,10 @@ class QuantileLoss(nn.Module):
             self.quantile * errors
         )
         return loss.mean()
-
-class TrendRemovalLoss(nn.Module):
-    def __init__(self, lambda_trend=0):
-        super(TrendRemovalLoss, self).__init__()
-        self.lambda_trend = lambda_trend
-        self.mse_loss = nn.MSELoss()
-
-    def forward(self, predictions, targets):
-        # Compute the residuals
-        residuals = predictions - targets
-        
-        # Ensure residuals are 2D (n, 1) for lstsq
-        if residuals.dim() == 1:
-            residuals = residuals.unsqueeze(1)
-        
-        # Mean Squared Error Loss
-        mse_loss = self.mse_loss(predictions, targets)
-
-        # Remove linear trend from residuals using torch.linalg.lstsq
-        n = residuals.size(0)
-        x = torch.arange(n, dtype=torch.float32, device=residuals.device).unsqueeze(1)
-        X = torch.cat((x, torch.ones_like(x)), dim=1)  # Design matrix [x, 1] for linear regression
-        
-        # Solve for linear regression coefficients using torch.linalg.lstsq
-        result = torch.linalg.lstsq(X, residuals)
-        coeffs = result.solution
-
-        # Calculate the trend component
-        trend = X @ coeffs
-
-        # Trend Loss: Penalize the magnitude of the trend
-        trend_loss = torch.mean(trend ** 2)
-
-        # Combined loss
-        loss = mse_loss + self.lambda_trend * trend_loss
-        
-        return loss
     
 # Define a custom loss function with penalties for left and right tails
 class CustomMSELoss(nn.Module):
-    def __init__(self, left_percentile=20, right_percentile=80, left_penalty=2, right_penalty=2, variance_penalty_weight=2):
+    def __init__(self, left_percentile=15, right_percentile=85, left_penalty=6, right_penalty=6, variance_penalty_weight=1):
         super(CustomMSELoss, self).__init__()
         self.left_percentile = left_percentile
         self.right_percentile = right_percentile
@@ -176,21 +139,6 @@ class CustomMSELoss(nn.Module):
         
         return loss
     
-# Define the custom Root Mean Log Squared Error loss function
-class RMLSELoss(nn.Module):
-    def __init__(self):
-        super(RMLSELoss, self).__init__()
-
-    def forward(self, y_pred, y_true):
-        # Add 1 to avoid log(0)
-        log_pred = torch.log(y_pred + 1)
-        log_true = torch.log(y_true + 1)
-        # Compute the squared difference
-        squared_log_error = (log_pred - log_true) ** 2
-        # Calculate the mean and then take the square root
-        mean_squared_log_error = torch.mean(squared_log_error)
-        rmlse = torch.sqrt(mean_squared_log_error)
-        return rmlse
 
 def train(args):
 
@@ -669,12 +617,16 @@ def train(args):
             print("Results saved to normative_results_{}_ensemble_networks.csv".format(ws))
             predictions_df.to_csv('normative_predictions_{}_ensemble_networks.csv'.format(ws), index=False)
             print("Predictions saved to normative_predictions_{}_ensemble_networks.csv".format(ws))
+            hidden_df.to_csv('normative_hidden_{}_networks.csv'.format(ws), index=False)
+            print("Hidden saved to normative_predictions_{}_networks.csv".format(ws))
 
         if networks == ' ' and args.ensemble_networks == ' ':
             results_df.to_csv('normative_results_{}_333.csv'.format(ws), index=False)
             print("Results saved to normative_results_{}_333.csv".format(ws))
             predictions_df.to_csv('normative_predictions_{}_333.csv'.format(ws), index=False)
             print("Predictions saved to normative_predictions_{}_333.csv".format(ws))
+            hidden_df.to_csv('normative_hidden_{}_networks.csv'.format(ws), index=False)
+            print("Hidden saved to normative_predictions_{}_networks.csv".format(ws))
 
     torch.cuda.empty_cache()
 
