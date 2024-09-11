@@ -47,7 +47,7 @@ def train(args):
     TS = args.TS
 
     batch_size_training = args.bs 
-    batch_size_testing = 32
+    batch_size_testing = 64
     dropout = args.dropout
 
     num_scales_gcn = args.gcn_scales
@@ -71,7 +71,7 @@ def train(args):
     hparams['optim'] = args.optim
 
     if args.regression:
-        criterion = nn.L1Loss() #nn.MSELoss()
+        criterion = nn.MSELoss()
     else:
         criterion = nn.BCELoss()
 

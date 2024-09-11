@@ -66,6 +66,7 @@ def main(args):
 
     idx = 0
     non_used = []
+    used = []
     adj_matrices = []
     
     for i in range(nb_subject):
@@ -107,24 +108,32 @@ def main(args):
                 data_all = np.concatenate((data_all, z_sequence), axis=1)
             
             data[idx,0,:,:,0] = np.transpose(z_sequence)
-            label[idx] = ids.loc[i, args.label]
+            label[idx] = ids[ids.subject == int(subject_string)][args.label].values
 
             adj_matrix = compute_adjacency_matrix(z_sequence.T)
             adj_matrices.append(adj_matrix)
 
             idx = idx + 1
+            used.append(int(subject_string))
+
             if idx % 100 == 0:
                 print('subject preprocessed: {}'.format(idx))
             
         else:
             non_used.append(subject_string)
+
+    used = np.array(used)
         
      # Keep only successfully processed subjects
     data = data[:idx,0,:,:,0]
     label = label[:idx]
 
     # Align `ids` DataFrame indices with the processed data
-    ids = ids.loc[ids.index[:idx]].reset_index(drop=True)
+    #ids = ids.loc[ids.index[:idx]].reset_index(drop=True)
+    ids['subject'] = ids['subject'].astype(str)
+    ids = ids[ids.subject.isin(used)]
+    ids['subject'] = pd.Categorical(ids['subject'], categories=used, ordered=True)
+    ids = ids.sort_values('subject').reset_index(drop=True)
 
     print('')
     print('Number of subjects loaded: {}'.format(idx))
@@ -198,9 +207,9 @@ def main(args):
     np.save(filename, test_label)
 
     # Save subject IDs
-    train_subjects = ids.loc[remaining_train_idx, 'subject'].values
-    validation_subjects = ids.loc[validation_idx, 'subject'].values
-    test_subjects = ids.loc[test_idx, 'subject'].values
+    train_subjects = used[remaining_train_idx] #ids.loc[remaining_train_idx, 'subject'].values
+    validation_subjects = used[validation_idx] #ids.loc[validation_idx, 'subject'].values
+    test_subjects = used[test_idx] #ids.loc[test_idx, 'subject'].values
     filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'train_subjects.npy')
     np.save(filename, train_subjects)
     filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'validation_subjects.npy')
