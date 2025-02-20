@@ -17,17 +17,17 @@ def compute_adjacency_matrix(data):
     Returns:
         Adjacency matrix of shape (ROI_nodes, ROI_nodes).
     """
-    n_regions = data.shape[1]
+    n_regions = data.shape[1] 
     A = np.zeros((n_regions, n_regions))
     for i in range(n_regions):
         for j in range(i, n_regions):
             if i == j:
-                A[i][j] = 1
+                A[i][j] = 0
             else:
-                A[i][j] = abs(np.corrcoef(data[:, i], data[:, j])[0][1])
+                A[i][j] = (np.corrcoef(data[:, i], data[:, j])[0][1]) #abs
                 A[j][i] = A[i][j]
     A = np.nan_to_num(A)  # Replace NaN with 0
-    A = np.tanh(A)
+    A = np.arctanh(A)
     return A
 
 def main(args):
@@ -85,6 +85,8 @@ def main(args):
         ## --------
         if args.regression == False:
             ids['TOTAL_DAWBA'] = ids['TOTAL_DAWBA'].apply(lambda x: 0 if x == 0.0 else 1)
+            ids['dcany2010'] = ids['dcany2010'].apply(lambda x: 0 if x == 0.0 else 1)
+
             
         nb_subject = ids.shape[0]
     else:
@@ -132,11 +134,11 @@ def main(args):
 
         # Gordon Parcellation
         if args.parcel == 'Gordon':
-            filename = '/INPD/GordonConnBOLD/GordonConnBOLD-'+subject_string+'.txt'
+            filename = '/GordonConnBOLD-'+subject_string+'.txt'
             
         # Schaefer Parcellation
         if args.parcel == 'Schaefer':
-            filename = '/INPD/Schaefer/Schaefer_fMRIPREP_BOLD-'+subject_string+'.txt'
+            filename = '/Schaefer_fMRIPREP_BOLD-'+subject_string+'.txt'
             
         filepath = str(data_path) + filename
         if os.path.exists(filepath):
@@ -219,7 +221,7 @@ def main(args):
     print('')
            
     # Average the adjacency matrices
-    avg_adj_matrix = np.arctanh(np.mean(adj_matrices, axis=0))
+    avg_adj_matrix = np.tanh(np.mean(adj_matrices, axis=0))
 
     print('')
     print('saving adjacency matrix')
