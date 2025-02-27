@@ -103,7 +103,7 @@ For regression just add
 
 ### Train in whole data (all ROIs)
 '''
-python ../tools/train_node_timeseries_networks.py --bs 32 --epochs 300 --gpu 0 --windows 80 --dropout 0.0 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Parcels_7Networks.xlsx
+python ../tools/train_node_timeseries_networks.py --bs 32 --epochs 300 --gpu 0 --windows 80 --dropout 0.3 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Parcels_7Networks.xlsx
 '''
 
 ### To training on each network

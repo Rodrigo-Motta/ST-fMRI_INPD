@@ -8,6 +8,8 @@ from scipy import stats
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold, KFold, StratifiedShuffleSplit, ShuffleSplit
+
 
 def compute_adjacency_matrix(data):
     """
@@ -181,7 +183,7 @@ def main(args):
             adj_matrices.append(adj_matrix)
 
             idx = idx + 1
-            used.append(int(subject_string))
+            used.append(subject_string)
 
             if idx % 100 == 0:
                 print('subject preprocessed: {}'.format(idx))
@@ -189,7 +191,7 @@ def main(args):
         else:
             non_used.append(subject_string)
     
-    used = np.array(used)
+    used = np.array(used, dtype=str)
     ### keep only subjects
     data = data[:idx,0,:,:,0]
     label = label[:idx]
@@ -242,47 +244,129 @@ def main(args):
 
     np.save(os.path.join(args.output_folder,'node_timeseries/node_timeseries/adj_matrix.npy'), avg_adj_matrix)
 
-    # split train/test and save data
+    # ----------------------------------------------------------------------
+    # 5) Split data, depending on mode
+    # ----------------------------------------------------------------------
+    print('\n' + '#' * 30)
+    print(f'Splitting data (mode: {args.split_mode})')
+    print('#' * 30, '\n')
+
+    outdir = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries')
+    os.makedirs(outdir, exist_ok=True)
+
+    if args.split_mode == 'default_5fold':
+
+        # split train/test and save data
+        
+        if args.regression:
+            skf = KFold(n_splits=5, shuffle=True, random_state=42)
+        else:
+            skf = StratifiedKFold(n_splits=5,shuffle=True, random_state=42)
+
+        fold = 1
+        for train_idx, test_idx in skf.split(data, label):
+            train_data = data[train_idx]
+            train_label = label[train_idx]
+            test_data = data[test_idx]
+            test_label = label[test_idx]
+
+            filename = os.path.join(outdir, 'train_data_'+str(fold)+'.npy')
+            np.save(filename, train_data)
+            filename = os.path.join(outdir, 'train_label_'+str(fold)+'.npy')
+            np.save(filename, train_label)
+            filename = os.path.join(outdir, 'test_data_'+str(fold)+'.npy')
+            np.save(filename, test_data)
+            filename = os.path.join(outdir, 'test_label_'+str(fold)+'.npy')
+            np.save(filename, test_label)
+
+            # Save subject IDs for each fold
+            train_subjects = used[train_idx] #ids.loc[train_idx, 'subject'].values
+            test_subjects = used[test_idx] #ids.loc[test_idx, 'subject'].values
+            filename = os.path.join(outdir, 'train_subjects_'+str(fold)+'.npy')
+            np.save(filename, train_subjects)
+            filename = os.path.join(outdir, 'node_timeseries', 'test_subjects_'+str(fold)+'.npy')
+            np.save(filename, test_subjects)
+
+            fold += 1
     
-    if args.regression:
-        skf = KFold(n_splits=5, shuffle=True, random_state=42)
-    else:
-        skf = StratifiedKFold(n_splits=5,shuffle=True, random_state=42)
+    elif args.split_mode == 'start_split':
+        print(args.split_mode)
+        # -----------------------------------------------------------
+        # New: 
+        #   - test = subjects whose string starts with "2"
+        #   - train+val = subjects whose string starts with "1"
+        #   - then split those "1" subjects as 80% train, 20% val
+        # -----------------------------------------------------------
+        used_str = used.tolist()
+        used_array = np.array(used_str)
 
-    fold = 1
-    for train_idx, test_idx in skf.split(data, label):
-        train_data = data[train_idx]
-        train_label = label[train_idx]
-        test_data = data[test_idx]
-        test_label = label[test_idx]
+        # Indices for subjects that start with '1' or '2'
+        idx_s1 = [i for i, s in enumerate(used_str) if s.startswith('1')]
+        idx_s2 = [i for i, s in enumerate(used_str) if s.startswith('2')]
 
-        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'train_data_'+str(fold)+'.npy')
-        np.save(filename, train_data)
-        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'train_label_'+str(fold)+'.npy')
-        np.save(filename, train_label)
-        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'test_data_'+str(fold)+'.npy')
-        np.save(filename, test_data)
-        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'test_label_'+str(fold)+'.npy')
-        np.save(filename, test_label)
+        data_s1 = data[idx_s1]
+        label_s1 = label[idx_s1]
+        data_s2 = data[idx_s2]
+        label_s2 = label[idx_s2]
 
-        # Save subject IDs for each fold
-        train_subjects = used[train_idx] #ids.loc[train_idx, 'subject'].values
-        test_subjects = used[test_idx] #ids.loc[test_idx, 'subject'].values
-        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'train_subjects_'+str(fold)+'.npy')
-        np.save(filename, train_subjects)
-        filename = os.path.join(args.output_folder, 'node_timeseries', 'node_timeseries', 'test_subjects_'+str(fold)+'.npy')
-        np.save(filename, test_subjects)
+        # We'll put everything that starts with '2' into the "test" set
+        test_data = data_s2
+        test_label = label_s2
+        test_subjects = used_array[idx_s2]
 
-        fold += 1
+        # Now split the "1" group into 80/20 for train/val
+        if len(data_s1) == 0:
+            raise ValueError("No subjects found that start with '1'. Cannot create train/val split.")
+        
+        if not args.regression:
+            # classification => stratified
+            sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+            s1_split_iter = sss.split(data_s1, label_s1)
+        else:
+            # regression => standard shuffle
+            sss = ShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+            s1_split_iter = sss.split(data_s1)
+
+        for train_index_s1, val_index_s1 in s1_split_iter:
+            train_data = data_s1[train_index_s1]
+            train_label = label_s1[train_index_s1]
+            val_data = data_s1[val_index_s1]
+            val_label = label_s1[val_index_s1]
+
+            train_subjects = used_array[idx_s1][train_index_s1]
+            val_subjects = used_array[idx_s1][val_index_s1]
+
+        # Save to .npy
+        np.save(os.path.join(outdir, 'train_data.npy'), train_data)
+        np.save(os.path.join(outdir, 'train_label.npy'), train_label)
+        np.save(os.path.join(outdir, 'val_data.npy'), val_data)
+        np.save(os.path.join(outdir, 'val_label.npy'), val_label)
+        np.save(os.path.join(outdir, 'test_data.npy'), test_data)
+        np.save(os.path.join(outdir, 'test_label.npy'), test_label)
+
+        np.save(os.path.join(outdir, 'train_subjects.npy'), train_subjects)
+        np.save(os.path.join(outdir, 'val_subjects.npy'), val_subjects)
+        np.save(os.path.join(outdir, 'test_subjects.npy'), test_subjects)
+
+        print(f"Train size: {len(train_data)}, Val size: {len(val_data)}, Test size: {len(test_data)}")
+
+    print('\nPreprocessing complete!')
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocessing script.")
     parser.add_argument('--filename', required=True, help='Path to the subject ID file (txt or csv).')
     parser.add_argument('--label', required=True, type=str, help='Label name.')
-    parser.add_argument('--regression', required=False, default=False, metavar='S',type=bool, help='task (classification or regression).')
+    parser.add_argument('--regression', action='store_true',help='Use regression (MSELoss) instead of classification (BCELoss)?')
     parser.add_argument('--data_path', required=True, help='Base directory of node timeseries data.')
     parser.add_argument('--output_folder', required=True, help='Directory to save the output data.')
-    parser.add_argument('--parcel', required=True, type=str, help='Parcellation name.')
+    parser.add_argument('--parcel', required=True, type=str, help='Parcellation name.') 
+
+       # New argument to control splitting mode
+    parser.add_argument('--split_mode', required=True, type=str, 
+                        choices=['default_5fold', 'start_split'],
+                        help='Splitting mode: "default_5fold" for original 5-fold, '
+                             '"start_split" for train/val (start="1") + test (start="2").')
 
     args = parser.parse_args()
     main(args)

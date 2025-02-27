@@ -212,6 +212,7 @@ def train(args):
                     net.train()
 
                     idx_batch = np.random.permutation(int(train_data.shape[0]))
+                    #idx_batch = np.arange(int(train_data.shape[0]))
                     idx_batch = idx_batch[:int(batch_size_training)]
 
                     train_data_batch = np.zeros((batch_size_training, 1, ws, ROI_nodes, 1))
@@ -244,6 +245,8 @@ def train(args):
                     if epoch % epoch_val == 0:
                         net.eval()
                         idx_batch = np.random.permutation(int(test_data.shape[0]))
+                        #idx_batch = np.arange(int(test_data.shape[0]))
+
                         idx_batch = idx_batch[:int(batch_size_testing)]
 
                         test_label_batch = test_label[idx_batch]
@@ -254,6 +257,8 @@ def train(args):
 
                         for v in range(TS):
                             idx = np.random.permutation(int(test_data.shape[0]))
+                            #idx = np.arange(int(test_data.shape[0]))
+
 
                             for k in range(int(test_data.shape[0] / batch_size_testing)):
                                 idx_batch = idx[int(batch_size_testing * k):int(batch_size_testing * (k + 1))]
@@ -273,6 +278,7 @@ def train(args):
 
                                 prediction[idx_batch] = prediction[idx_batch] + outputs[:, 0]
                                 voter[idx_batch] = voter[idx_batch] + 1
+                                voter[voter == 0] = 1
 
                         prediction = prediction / voter
 
@@ -432,7 +438,7 @@ if __name__ == '__main__':
         '--dropout',
         type=float,
         required=False,
-        default=0.0,
+        default=0.3,
         help='windows')
 
     parser.add_argument(
