@@ -362,8 +362,8 @@ if __name__ == "__main__":
     parser.add_argument('--output_folder', required=True, help='Directory to save the output data.')
     parser.add_argument('--parcel', required=True, type=str, help='Parcellation name.') 
 
-       # New argument to control splitting mode
-    parser.add_argument('--split_mode', required=True, type=str, 
+    # New argument to control splitting mode
+    parser.add_argument('--split_mode', required=True, type=str, default='default_5fold',
                         choices=['default_5fold', 'start_split'],
                         help='Splitting mode: "default_5fold" for original 5-fold, '
                              '"start_split" for train/val (start="1") + test (start="2").')

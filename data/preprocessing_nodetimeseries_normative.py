@@ -10,12 +10,12 @@ def compute_adjacency_matrix(data):
     for i in range(n_regions):
         for j in range(i, n_regions):
             if i == j:
-                A[i][j] = 1
+                A[i][j] = 0
             else:
                 A[i][j] = abs(np.corrcoef(data[:, i], data[:, j])[0][1])
                 A[j][i] = A[i][j]
     A = np.nan_to_num(A)  # Replace NaN with 0
-    A = np.tanh(A)
+    A = np.arctanh(A)
     return A
 
 def main(args):
@@ -37,6 +37,7 @@ def main(args):
         ids.gender.replace(2.0, 1, inplace=True)
         if not args.regression:
             ids['TOTAL_DAWBA'] = ids['TOTAL_DAWBA'].apply(lambda x: 0 if x == 0.0 else 1)
+            ids['dcany2010'] = ids['dcany2010'].apply(lambda x: 0 if x == 0.0 else 1)
         nb_subject = ids.shape[0]
     else:
         raise TypeError('filetype not implemented')
@@ -156,7 +157,7 @@ def main(args):
     print('#'*30)
     print('')
            
-    avg_adj_matrix = np.arctanh(np.mean(adj_matrices, axis=0))
+    avg_adj_matrix = np.tanh(np.mean(adj_matrices, axis=0))
 
     print('')
     print('saving adjacency matrix')

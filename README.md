@@ -23,12 +23,12 @@ In the folder /data/:
 
 #### Psychiatric Diagnosis
 '''
-python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv  --label dcany2010 --data_path /home/rc24/Documents/projects/INPD/GordonConnBOLD  --output_folder ../outputs/ --parcel Gordon
+python preprocessing_nodetimeseries.py --filename phenotypic.csv  --label dcany2010 --data_path /home/rc24/Documents/projects/INPD/GordonConnBOLD  --output_folder ../outputs/ --parcel Gordon
 '''
 
 #### Age regression
 '''
-python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv  --label age_mri_baseline --data_path /home/rc24/Documents/projects/INPD/GordonConnBOLD  --output_folder ../outputs/ --regression True --parcel Gordon
+python preprocessing_nodetimeseries.py --filename phenotypic.csv  --label age_mri_baseline --data_path /home/rc24/Documents/projects/INPD/GordonConnBOLD  --output_folder ../outputs/ --regression True --parcel Gordon
 '''
 ##### Age regression for normative model
 
@@ -42,7 +42,7 @@ python preprocessing_nodetimeseries_normative.py --filename phenotypic.csv  --la
 
 #### Psychiatric Diagnosis
 '''
-python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv  --label dcany2010 --data_path /home/rc24/Documents/projects/INPD/Schaefer_wave1  --output_folder ../outputs/ --parcel Schaefer
+python preprocessing_nodetimeseries.py --filename phenotypic.csv  --label dcany2010 --data_path /home/rc24/Documents/projects/INPD/Schaefer_wave1  --output_folder ../outputs/ --parcel Schaefer
 '''
 
 #### for Longitudinal data (wave0 and wave1)
@@ -60,13 +60,26 @@ python preprocessing_nodetimeseries_longitudinal.py \
 
 #### Age regression
 '''
-python preprocessing_nodetimeseries_trial.py --filename phenotypic.csv --label age_mri_baseline --data_path /home/rc24/Documents/projects/INPD/Schaefer_wave1 --output_folder ../outputs/ --parcel Schaefer --regression True
+python preprocessing_nodetimeseries.py --filename phenotypic.csv --label age_mri_baseline --data_path /home/rc24/Documents/projects/INPD/Schaefer_wave1 --output_folder ../outputs/ --parcel Schaefer --regression True
 '''
 
 #### Age regression for normative model
 
 '''
 python preprocessing_nodetimeseries_normative.py --filename phenotypic.csv  --label age_mri_baseline --data_path /home/rc24/Documents/projects/INPD/Schaefer_wave1  --output_folder ../outputs/ --regression True --parcel Schaefer
+'''
+
+### training for site division
+
+'''
+python ../tools/train_node_timeseries_site.py  --bs 32 --epochs 300 --gpu 0 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Parcels_7Networks.xlsx --networks Vis SomMot DorsAttn SalVentAttn Limbic Cont Default --windows 40
+'''
+
+
+### Static FC preprocessing
+
+'''
+python preprocessing_staticFC.py --filename phenotypic.csv  --label dcany2010 --data_path /home/rc24/Documents/projects/INPD/Schaefer_wave1  --output_folder ../outputs/ --parcel Schaefer --split_mode start_split
 '''
 
 
@@ -111,9 +124,9 @@ python ../tools/train_node_timeseries_networks.py --bs 32 --epochs 300 --gpu 0 -
 python ../tools/train_node_timeseries_networks_copy.py  --bs 32 --epochs 300 --gpu 1 --windows 40 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Parcels_7Networks.xlsx --networks Vis SomMot DorsAttn SalVentAttn Limbic Cont Default
 '''
 
-### Train normative model for age
+### Train site model for age
 '''
-python ../tools/train_node_timeseries_normative.py --bs 8 --epochs 300 --gpu 0 --windows 42 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Parcels_7Networks.xlsx  --dropout 0.7 --regression True
+python ../tools/train_node_timeseries_site.py  --bs 32 --epochs 300 --gpu 0 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Parcels_7Networks.xlsx --networks Vis SomMot DorsAttn SalVentAttn Limbic Cont Default --windows 40 --regression
 '''
 
 ### Longitudinal classification
@@ -122,7 +135,14 @@ python ../tools/train_node_timeseries_normative.py --bs 8 --epochs 300 --gpu 0 -
 python ../tools/train_node_timeseries_longitudinal.py  --bs 32 --epochs 300 --gpu 1 --windows 40 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Parcels_7Networks.xlsx --networks Vis SomMot DorsAttn SalVentAttn Limbic Cont Default
 '''
 
+# Training static FC GCN
 
+### Age regression
+
+'''
+python ../tools/train_node_staticFC_site.py  --bs 32 --epochs 600 --gpu 1 --data_path ../outputs --parcel_path /home/rc24/Documents/projects/INPD/Schaefer2018_300Pa
+rcels_7Networks.xlsx --networks Vis SomMot DorsAttn SalVentAttn Limbic Cont Default --regression
+'''
 
 # References 
 
